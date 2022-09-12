@@ -22,6 +22,7 @@ def get_clean_text(text: str):
     text = re.sub(r"[\U00010000-\U0010ffff]", "", text)
     text = re.sub(r"<.*?>", "", text)
     text = re.sub(r"\ufeff", "", text)
+    text = re.sub(r"\s+", " ", text)
 
     return text
 
@@ -29,8 +30,8 @@ def get_clean_text(text: str):
 #  Clean the data
 df_train["clean_text"] = df_train["text"].apply(get_clean_text)
 
-# Remove the column with empty string
-df_train = df_train[df_train["clean_text"].isin(["", " "])]
+# Remove the column with empty string or only spaces
+df_train = df_train[df_train["clean_text"].str.strip() != ""]
 
 # Keyword extraction
 sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -63,7 +64,6 @@ classifier = pipeline("zero-shot-classification",
 
 zs_labels = classifier(df_train["clean_text"].iloc[0:10].tolist(), ham_keywords + spam_keywords, multi_label=False)
 
-
 #  Clustering
 corpus_sentences = df_train["clean_text"].tolist()
 print("Start clustering")
@@ -80,7 +80,7 @@ print("Clustering done after {:.2f} sec".format(time.time() - start_time))
 
 # Print for all clusters the top 3 and bottom 3 elements
 
-clusters_sentences_list = [[corpus_sentences[idx] for idx in cluster] for cluster in clusters]
+clusters_sentences_list = [list(set([corpus_sentences[idx] for idx in cluster])) for cluster in clusters]
 
 for i, cluster in enumerate(clusters):
     print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
