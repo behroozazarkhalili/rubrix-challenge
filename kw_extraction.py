@@ -54,4 +54,8 @@ def get_similarity(metric, keywords: List[str], text: str, threshold: float = 0.
     return sim_values
 
 
-get_similarity(Levenshtein, ham_keywords, "I am vide son musc", 0.75)
+#  Zero shot classification
+classifier = pipeline("zero-shot-classification",
+                      model="facebook/bart-large-mnli")
+
+zs_labels = classifier(df_train["clean_text"].iloc[0:10].tolist(), ham_keywords + spam_keywords, multi_label=False)
