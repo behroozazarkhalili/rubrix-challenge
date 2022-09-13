@@ -42,24 +42,23 @@ def get_clean_data(train_dataframe: pd.DataFrame, test_dataframe: pd.DataFrame):
 df_test, df_train = get_clean_data(df_train, df_test)
 
 # Keyword extraction
-# sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-sentence_model = SentenceTransformer("facebook/bart-large-mnli")
+sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
 keybert_model = KeyBERT(model=sentence_model)
 
 
-def get_kw(kw_model: KeyBERT, train_dataframe: pd.DataFrame, top_n: int = 5, n_common: int = 5):
+def get_kw(kw_model: KeyBERT, train_dataframe: pd.DataFrame, top_n: int = 5):
     # Extract keywords by sentence-transformer
     train_dataframe['keywords'] = train_dataframe['clean_text'].apply(lambda x: kw_model.extract_keywords(x, keyphrase_ngram_range=(1, 1), stop_words='english', top_n=top_n))
 
     # Get the most common keywords
     keywords_list = train_dataframe['keywords'].apply(lambda x: [i[0] for i in x]).tolist()
     keywords_list = [item for sublist in keywords_list for item in sublist]
-    keywords_most_frequent = Counter(keywords_list).most_common(n_common)
 
-    return keywords_most_frequent
+    return keywords_list
 
 
-frequent_keywords = get_kw(keybert_model, df_train, top_n=5, n_common=5)
+frequent_keywords = get_kw(keybert_model, df_train, top_n=5)
+keywords_most_frequent = Counter(frequent_keywords).most_common(10)
 ham_keywords = ["song", "love", "music", "like"]
 spam_keywords = ["subscribe", "channel", "check"]
 
@@ -83,7 +82,6 @@ zs_labels = classifier(df_train["clean_text"].iloc[0:10].tolist(), ham_keywords 
 
 
 #  Clustering
-
 def get_clustered_date(model, training_dataframe: pd.DataFramem, batch_size: int = 32, min_cluster_size: int = 5, threshold: float = 0.75):
     corpus_sentences = training_dataframe["clean_text"].tolist()
 
@@ -109,3 +107,5 @@ def get_clustered_date(model, training_dataframe: pd.DataFramem, batch_size: int
         print("\t", "...")
         for sentence_id in cluster[-3:]:
             print("\t", corpus_sentences[sentence_id])
+
+    return clusters, clusters_sentences_list
