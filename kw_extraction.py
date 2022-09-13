@@ -81,27 +81,31 @@ def get_similarity(metric, keywords: List[str], text: str, threshold: float = 0.
 classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 zs_labels = classifier(df_train["clean_text"].iloc[0:10].tolist(), ham_keywords + spam_keywords, multi_label=False)
 
+
 #  Clustering
-corpus_sentences = df_train["clean_text"].tolist()
-print("Start clustering")
-start_time = time.time()
 
-corpus_embeddings = sentence_model.encode(corpus_sentences, batch_size=64, show_progress_bar=True, convert_to_tensor=True)
+def get_clustered_date(model, training_dataframe: pd.DataFrame):
+    corpus_sentences = training_dataframe["clean_text"].tolist()
 
-# Two parameters to tune:
-# min_cluster_size: Only consider cluster that have at least 25 elements
-# threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
-clusters = util.community_detection(corpus_embeddings, min_community_size=10, threshold=0.75)
+    print("Start clustering")
+    start_time = time.time()
 
-print("Clustering done after {:.2f} sec".format(time.time() - start_time))
+    corpus_embeddings = model.encode(corpus_sentences, batch_size=64, show_progress_bar=True, convert_to_tensor=True)
 
-clusters_sentences_list = [list(set([corpus_sentences[idx] for idx in cluster])) for cluster in clusters]
+    # Two parameters to tune:
+    # min_cluster_size: Only consider cluster that have at least 25 elements
+    # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
+    clusters = util.community_detection(corpus_embeddings, min_community_size=10, threshold=0.75)
 
-# Print for all clusters the top 3 and bottom 3 elements
-for i, cluster in enumerate(clusters):
-    print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
-    for sentence_id in cluster[0:3]:
-        print("\t", corpus_sentences[sentence_id])
-    print("\t", "...")
-    for sentence_id in cluster[-3:]:
-        print("\t", corpus_sentences[sentence_id])
+    print("Clustering done after {:.2f} sec".format(time.time() - start_time))
+
+    clusters_sentences_list = [list(set([corpus_sentences[idx] for idx in cluster])) for cluster in clusters]
+
+    # Print for all clusters the top 3 and bottom 3 elements
+    for i, cluster in enumerate(clusters):
+        print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
+        for sentence_id in cluster[0:3]:
+            print("\t", corpus_sentences[sentence_id])
+        print("\t", "...")
+        for sentence_id in cluster[-3:]:
+            print("\t", corpus_sentences[sentence_id])
