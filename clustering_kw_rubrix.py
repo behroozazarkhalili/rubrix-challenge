@@ -213,7 +213,7 @@ def get_indices(cluster_class_labels, class_labels):
 
 def get_class_labels(clusters_info: List[List[str]], text: str, cluster_class_labels: List[str], class_labels: List[str]):
     """
-    Get the class label of the text based on the clusters information
+    Get the class label of the text based on the clusters' information
     :param clusters_info: the list of cluster information which can be either list of text or keywords of each cluster
     :param text: the text to be classified
     :param cluster_class_labels: the list of class labels of clusters
@@ -236,7 +236,7 @@ print(get_class_labels(cluster_most_frequent_kws, df_test["clean_text"].iloc[0],
 
 def get_df_class_labels(df: pd.DataFrame, clusters_info: List[List[str]], cluster_class_labels: List[str], class_labels: List[str]):
     """
-    Get the class labels of the text column of a dataframe based on the clusters information
+    Get the class labels of the text column of a dataframe based on the clusters' information
     :param pd.DataFrame df: the dataframe
     :param List[List[str]] clusters_info: the list of cluster information which can be either list of text or keywords of each cluster
     :param List[str] cluster_class_labels: the list of class labels of clusters
