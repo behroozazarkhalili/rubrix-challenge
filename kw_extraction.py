@@ -205,3 +205,24 @@ majority_model = MajorityVoter(weak_labels)
 # check its performance
 print(majority_model.score(output_str=True))
 
+
+def get_cluster_similarity(cluster_info_list: List[List[str]], text: str):
+    cluster_embeddings_list = [sentence_model.encode(cluster_info, convert_to_tensor=True) for cluster_info in cluster_info_list]
+    text_embeddings = sentence_model.encode(text, batch_size=64, convert_to_tensor=True)
+
+    similarity_matrices = [util.cos_sim(text_embeddings, cluster_embedding).cpu().numpy() for cluster_embedding in cluster_embeddings_list]
+    similarity_scores = [np.mean(similarity_matrix) for similarity_matrix in similarity_matrices]
+    similar_clusters = np.argsort(similarity_scores)[::-1]
+    return similarity_scores, similar_clusters
+
+
+get_cluster_similarity(clusters_sentences_list, df_test["clean_text"].iloc[0])
+get_cluster_similarity(cluster_most_frequent_kws, df_test["clean_text"].iloc[0])
+
+labels = ["HAM", "SPAM"]
+cluster_labels = ["SPAM", "SPAM", "SPAM", "HAM", "HAM", "SPAM", "HAM", "HAM"]
+
+
+def get_indices(cluster_class_labels: List[str], class_labels: List[str]):
+    indices = {label: [index for index in range(len(cluster_class_labels)) if cluster_class_labels[index] == label] for label in class_labels}
+    return indices
