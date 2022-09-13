@@ -7,10 +7,8 @@ import numpy as np
 import rubrix as rb
 import pandas as pd
 from keybert import KeyBERT
-from rubrix.labeling.text_classification import WeakLabels, load_rules, MajorityVoter
 from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics import classification_report
-from transformers import pipeline
 
 # Read the data
 df_train = pd.read_csv('data/yt_comments_train.csv', sep=',', header=0, index_col=0)
