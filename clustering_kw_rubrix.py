@@ -60,9 +60,9 @@ def get_kw_model(model_name_path: str = "all-MiniLM-L6-v2"):
     :param str model_name_path: the model name or path
     :return: return the keyword extraction model
     """
-    sentence_model = SentenceTransformer(model_name_or_path=model_name_path)
-    kw_model = KeyBERT(model=sentence_model)
-    return kw_model, sentence_model
+    st_model = SentenceTransformer(model_name_or_path=model_name_path)
+    kw_model = KeyBERT(model=st_model)
+    return kw_model, st_model
 
 
 # Keyword extraction
@@ -79,7 +79,7 @@ def get_kw(kw_model, df, top_n=5):
     df['keywords'] = df['clean_text'].apply(lambda x: kw_model.extract_keywords(x, keyphrase_ngram_range=(1, 1), stop_words='english', top_n=top_n))
 
     # Get the most common keywords
-    keywords_list = df['keywords'].apply(lambda x: [i[0] for i in x]).tolist()
+    keywords_list = df['keywords'].apply(lambda x: [item[0] for item in x]).tolist()
     keywords_list = [item for sublist in keywords_list for item in sublist]
 
     return keywords_list
