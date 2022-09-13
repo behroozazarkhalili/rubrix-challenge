@@ -1,6 +1,7 @@
 import re
 import time
 from collections import Counter
+from functools import partial
 from typing import List
 
 import numpy as np
@@ -10,6 +11,7 @@ from keybert import KeyBERT
 from rubrix.labeling.text_classification import WeakLabels, load_rules, MajorityVoter
 from sentence_transformers import SentenceTransformer, util
 from rapidfuzz.distance import Levenshtein
+from sklearn.metrics import classification_report
 from transformers import pipeline
 
 # Read the data
@@ -212,12 +214,13 @@ def get_cluster_similarity(cluster_info_list: List[List[str]], text: str):
 
     similarity_matrices = [util.cos_sim(text_embeddings, cluster_embedding).cpu().numpy() for cluster_embedding in cluster_embeddings_list]
     similarity_scores = [np.mean(similarity_matrix) for similarity_matrix in similarity_matrices]
+    normalized_similarity_scores = [score / np.sum(similarity_scores) for score in similarity_scores]
     similar_clusters = np.argsort(similarity_scores)[::-1]
-    return similarity_scores, similar_clusters
+    return normalized_similarity_scores, similar_clusters.tolist()
 
 
-get_cluster_similarity(clusters_sentences_list, df_test["clean_text"].iloc[0])
-get_cluster_similarity(cluster_most_frequent_kws, df_test["clean_text"].iloc[0])
+similarity_ss, _ = get_cluster_similarity(clusters_sentences_list, df_test["clean_text"].iloc[0])
+similarity_skw, _ = get_cluster_similarity(cluster_most_frequent_kws, df_test["clean_text"].iloc[0])
 
 labels = ["HAM", "SPAM"]
 cluster_labels = ["SPAM", "SPAM", "SPAM", "HAM", "HAM", "SPAM", "HAM", "HAM"]
@@ -226,3 +229,28 @@ cluster_labels = ["SPAM", "SPAM", "SPAM", "HAM", "HAM", "SPAM", "HAM", "HAM"]
 def get_indices(cluster_class_labels: List[str], class_labels: List[str]):
     indices = {label: [index for index in range(len(cluster_class_labels)) if cluster_class_labels[index] == label] for label in class_labels}
     return indices
+
+
+def get_class_labels(clusters_info: List[List[str]], text: str, cluster_class_labels: List[str], class_labels: List[str]):
+    similarity_scores, similar_clusters = get_cluster_similarity(clusters_info, text)
+    labels_indices = get_indices(cluster_class_labels, class_labels)
+    class_labels_scores = {label: sum([similarity_scores[index] for index in indices]) for label, indices in labels_indices.items()}
+    return class_labels_scores
+
+
+get_class_labels(cluster_most_frequent_kws, df_test["clean_text"].iloc[0], cluster_labels, labels)
+
+
+def get_df_class_labels(df: pd.DataFrame, clusters_info: List[List[str]], cluster_class_labels: List[str], class_labels: List[str]):
+    df_class_labels = df.copy()
+    df_class_labels["class_label_scores"] = df_class_labels["clean_text"].apply(lambda text: get_class_labels(clusters_info, text, cluster_class_labels, class_labels)[0])
+    df_class_labels["class_label"] = df_class_labels["class_label_scores"].apply(lambda class_labels_scores: max(class_labels_scores, key=class_labels_scores.get))
+    df_final = pd.concat([df_class_labels, df_class_labels['class_label_scores'].apply(pd.Series)], axis=1).drop('class_label_scores', axis=1)
+    return df_final
+
+
+df_pred = get_df_class_labels(df_test, cluster_most_frequent_kws, cluster_labels, labels)
+df_pred["true_label"] = df_pred["class_label"].apply(lambda label: labels.index(label))
+
+# Get the classification report from scikit learn
+print(classification_report(df_pred["true_label"], df_pred["label"]))
