@@ -39,7 +39,7 @@ def get_clean_data(train_dataframe: pd.DataFrame, test_dataframe: pd.DataFrame):
     return train_dataframe, test_dataframe
 
 
-df_test, df_train = get_clean_data(df_train, df_test)
+df_train, df_test = get_clean_data(df_train, df_test)
 
 # Keyword extraction
 sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -80,32 +80,28 @@ def get_similarity(metric, keywords: List[str], text: str, threshold: float = 0.
 classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 zs_labels = classifier(df_train["clean_text"].iloc[0:10].tolist(), ham_keywords + spam_keywords, multi_label=False)
 
-
 #  Clustering
-def get_clustered_date(model, training_dataframe: pd.DataFramem, batch_size: int = 32, min_cluster_size: int = 5, threshold: float = 0.75):
-    corpus_sentences = training_dataframe["clean_text"].tolist()
+corpus_sentences = df_train["clean_text"].tolist()
+print("Start clustering")
+start_time = time.time()
 
-    print("Start clustering")
-    start_time = time.time()
+corpus_embeddings = sentence_model.encode(corpus_sentences, batch_size=64, show_progress_bar=True, convert_to_tensor=True)
 
-    corpus_embeddings = model.encode(corpus_sentences, batch_size=batch_size, show_progress_bar=True, convert_to_tensor=True)
+# Two parameters to tune:
+# min_cluster_size: Only consider cluster that have at least 25 elements
+# threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
+clusters = util.community_detection(corpus_embeddings, min_community_size=10, threshold=0.75)
 
-    # Two parameters to tune:
-    # min_cluster_size: Only consider cluster that have at least 25 elements
-    # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
-    clusters = util.community_detection(corpus_embeddings, min_community_size=min_cluster_size, threshold=threshold)
+print("Clustering done after {:.2f} sec".format(time.time() - start_time))
 
-    print("Clustering done after {:.2f} sec".format(time.time() - start_time))
+# Print for all clusters the top 3 and bottom 3 elements
 
-    clusters_sentences_list = [list(set([corpus_sentences[idx] for idx in cluster])) for cluster in clusters]
+clusters_sentences_list = [[corpus_sentences[idx] for idx in cluster] for cluster in clusters]
 
-    # Print for all clusters the top 3 and bottom 3 elements
-    for i, cluster in enumerate(clusters):
-        print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
-        for sentence_id in cluster[0:3]:
-            print("\t", corpus_sentences[sentence_id])
-        print("\t", "...")
-        for sentence_id in cluster[-3:]:
-            print("\t", corpus_sentences[sentence_id])
-
-    return clusters, clusters_sentences_list
+for i, cluster in enumerate(clusters):
+    print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
+    for sentence_id in cluster[0:3]:
+        print("\t", corpus_sentences[sentence_id])
+    print("\t", "...")
+    for sentence_id in cluster[-3:]:
+        print("\t", corpus_sentences[sentence_id])
