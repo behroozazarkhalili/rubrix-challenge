@@ -84,18 +84,18 @@ zs_labels = classifier(df_train["clean_text"].iloc[0:10].tolist(), ham_keywords 
 
 #  Clustering
 
-def get_clustered_date(model, training_dataframe: pd.DataFrame):
+def get_clustered_date(model, training_dataframe: pd.DataFramem, batch_size: int = 32, min_cluster_size: int = 5, threshold: float = 0.75):
     corpus_sentences = training_dataframe["clean_text"].tolist()
 
     print("Start clustering")
     start_time = time.time()
 
-    corpus_embeddings = model.encode(corpus_sentences, batch_size=64, show_progress_bar=True, convert_to_tensor=True)
+    corpus_embeddings = model.encode(corpus_sentences, batch_size=batch_size, show_progress_bar=True, convert_to_tensor=True)
 
     # Two parameters to tune:
     # min_cluster_size: Only consider cluster that have at least 25 elements
     # threshold: Consider sentence pairs with a cosine-similarity larger than threshold as similar
-    clusters = util.community_detection(corpus_embeddings, min_community_size=10, threshold=0.75)
+    clusters = util.community_detection(corpus_embeddings, min_community_size=min_cluster_size, threshold=threshold)
 
     print("Clustering done after {:.2f} sec".format(time.time() - start_time))
 
