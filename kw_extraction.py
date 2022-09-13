@@ -10,8 +10,8 @@ from rapidfuzz.distance import Levenshtein
 from transformers import pipeline
 
 # Read the data
-df_train = pd.read_csv('data/yt_comments_train.csv', sep=',', header=0)
-df_test = pd.read_csv('data/yt_comments_test.csv', sep=',', header=0)
+df_train = pd.read_csv('data/yt_comments_train.csv', sep=',', header=0, index_col=0)
+df_test = pd.read_csv('data/yt_comments_test.csv', sep=',', header=0, index_col=0)
 
 
 def get_clean_text(text: str):
@@ -28,22 +28,35 @@ def get_clean_text(text: str):
 
 
 #  Clean the data
-df_train["clean_text"] = df_train["text"].apply(get_clean_text)
+def get_clean_data(train_dataframe: pd.DataFrame, test_dataframe: pd.DataFrame):
+    train_dataframe['clean_text'] = train_dataframe['text'].apply(get_clean_text)
+    test_dataframe['clean_text'] = test_dataframe['text'].apply(get_clean_text)
 
-# Remove the column with empty string or only spaces
-df_train = df_train[df_train["clean_text"].str.strip() != ""]
+    # Remove the column with empty string or only spaces
+    train_dataframe = train_dataframe[train_dataframe['clean_text'] != '']
+    test_dataframe = test_dataframe[test_dataframe['clean_text'] != '']
+
+    return train_dataframe, test_dataframe
+
+
+df_test, df_train = get_clean_data(df_train, df_test)
 
 # Keyword extraction
 sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
 kw_model = KeyBERT(model=sentence_model)
 
-# Extract keywords by sentence-transformer
-df_train['keywords'] = df_train['clean_text'].apply(lambda x: kw_model.extract_keywords(x, keyphrase_ngram_range=(1, 1), stop_words='english', top_n=5))
 
-# Get the most common keywords
-keywords_list = df_train['keywords'].apply(lambda x: [i[0] for i in x]).tolist()
-keywords_list = [item for sublist in keywords_list for item in sublist]
-keywords_most_frequent = Counter(keywords_list).most_common(15)
+def get_kw(kw_model: KeyBERT, text_df: pd.DataFrame, top_n: int = 5, n_common: int = 5):
+    # Extract keywords by sentence-transformer
+    df_train['keywords'] = df_train['clean_text'].apply(lambda x: kw_model.extract_keywords(x, keyphrase_ngram_range=(1, 1), stop_words='english', top_n=5))
+
+    # Get the most common keywords
+    keywords_list = df_train['keywords'].apply(lambda x: [i[0] for i in x]).tolist()
+    keywords_list = [item for sublist in keywords_list for item in sublist]
+    keywords_most_frequent = Counter(keywords_list).most_common(n_common)
+
+    return keywords_most_frequent
+
 
 ham_keywords = ["song", "love", "music", "like"]
 spam_keywords = ["subscribe", "channel", "check"]
@@ -78,10 +91,9 @@ clusters = util.community_detection(corpus_embeddings, min_community_size=10, th
 
 print("Clustering done after {:.2f} sec".format(time.time() - start_time))
 
-# Print for all clusters the top 3 and bottom 3 elements
-
 clusters_sentences_list = [list(set([corpus_sentences[idx] for idx in cluster])) for cluster in clusters]
 
+# Print for all clusters the top 3 and bottom 3 elements
 for i, cluster in enumerate(clusters):
     print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
     for sentence_id in cluster[0:3]:
