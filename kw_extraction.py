@@ -3,8 +3,11 @@ import time
 from collections import Counter
 from typing import List
 
+import numpy as np
+import rubrix as rb
 import pandas as pd
 from keybert import KeyBERT
+from rubrix.labeling.text_classification import WeakLabels, load_rules, MajorityVoter
 from sentence_transformers import SentenceTransformer, util
 from rapidfuzz.distance import Levenshtein
 from transformers import pipeline
@@ -23,6 +26,7 @@ def get_clean_text(text: str):
     text = re.sub(r"<.*?>", "", text)
     text = re.sub(r"\ufeff", "", text)
     text = re.sub(r"\s+", " ", text)
+    text = text.lower()
 
     return text
 
@@ -33,8 +37,8 @@ def get_clean_data(train_dataframe: pd.DataFrame, test_dataframe: pd.DataFrame):
     test_dataframe['clean_text'] = test_dataframe['text'].apply(get_clean_text)
 
     # Remove the column with empty string or only spaces
-    train_dataframe = train_dataframe[train_dataframe['clean_text'] != '']
-    test_dataframe = test_dataframe[test_dataframe['clean_text'] != '']
+    train_dataframe = train_dataframe[train_dataframe['clean_text'].str.strip() != '']
+    test_dataframe = test_dataframe[test_dataframe['clean_text'].str.strip() != '']
 
     return train_dataframe, test_dataframe
 
@@ -60,7 +64,7 @@ def get_kw(kw_model: KeyBERT, train_dataframe: pd.DataFrame, top_n: int = 5):
 frequent_keywords = get_kw(keybert_model, df_train, top_n=5)
 keywords_most_frequent = Counter(frequent_keywords).most_common(10)
 ham_keywords = ["song", "love", "music", "like"]
-spam_keywords = ["subscribe", "channel", "check"]
+spam_keywords = ["subscribe", "channel", "check", "youtube"]
 
 
 # Get the most similar words of the text to the keywords
@@ -94,10 +98,9 @@ clusters = util.community_detection(corpus_embeddings, min_community_size=10, th
 
 print("Clustering done after {:.2f} sec".format(time.time() - start_time))
 
-# Print for all clusters the top 3 and bottom 3 elements
-
 clusters_sentences_list = [[corpus_sentences[idx] for idx in cluster] for cluster in clusters]
 
+# Print for all clusters the top 3 and bottom 3 elements
 for i, cluster in enumerate(clusters):
     print("\nCluster {}, #{} Elements ".format(i + 1, len(cluster)))
     for sentence_id in cluster[0:3]:
@@ -109,14 +112,96 @@ for i, cluster in enumerate(clusters):
 
 def get_kw_from_cluster(kw_model: KeyBERT, text_list: List[List[str]], top_n: int = 3):
     initial_kws = [kw_model.extract_keywords(text, keyphrase_ngram_range=(1, 1), stop_words='english', top_n=top_n) for text in text_list]
-    flatten_list = [kw for kws in initial_kws for kw in kws]
-    flatten_list = [kw for kws in flatten_list for kw in kws]
-    kws_list = [kw[0] for kw in flatten_list]
+    kws_list = [[k[0] for kw in cluster for k in kw] for cluster in initial_kws]
     return kws_list
 
 
-cluster_kw_frequent_keywords = get_kw_from_cluster(keybert_model, clusters_sentences_list, 3)
-cluster_keywords_most_frequent = Counter(cluster_kw_frequent_keywords).most_common(10)
+cluster_frequent_kws = get_kw_from_cluster(keybert_model, clusters_sentences_list, 5)
+cluster_frequent_kws = [cluster_frequent_kw for cluster_frequent_kw in cluster_frequent_kws if len(cluster_frequent_kw) > 0]
+cluster_most_frequent_kws_init = [Counter(cluster_keywords).most_common(3) for cluster_keywords in cluster_frequent_kws]
+cluster_most_frequent_kws = [[item[0] for item in most_frequent_kws] for most_frequent_kws in cluster_most_frequent_kws_init]
 
 cluster_ham_keywords = ["song", "love", "best"]
-cluster_spam_keywords = ["subscribe", "channel", "check"]
+cluster_spam_keywords = ["subscribe", "channel", "check", "playlist"]
+
+# build records from the train dataset
+records = [
+    rb.TextClassificationRecord(
+        text=row.clean_text,
+        metadata={"video": row.video, "author": row.author}
+    )
+    for i, row in df_train.iterrows()
+]
+
+# build records from the test dataset with annotation
+labels = ["HAM", "SPAM"]
+
+df_train["label"] = df_train["label"].astype(int)
+records += [
+    rb.TextClassificationRecord(
+        text=row.clean_text,
+        annotation=labels[row.label],
+        metadata={"video": row.video, "author": row.author}
+    )
+    for i, row in df_train.iterrows()
+]
+
+# log records to Rubrix
+rb.log(records, name="weak_supervision_yt")
+
+
+# rules defined as Python labeling functions
+def contains_subscribe(record: rb.TextClassificationRecord):
+    if "subscribe" in record.inputs["text"]:
+        return "SPAM"
+
+
+def contains_check(record: rb.TextClassificationRecord):
+    if "check" in record.inputs["text"]:
+        return "SPAM"
+
+
+def contains_channel(record: rb.TextClassificationRecord):
+    if "channel" in record.inputs["text"]:
+        return "SPAM"
+
+
+def contains_playlist(record: rb.TextClassificationRecord):
+    if "playlist" in record.inputs["text"]:
+        return "SPAM"
+
+
+def contains_youtube(record: rb.TextClassificationRecord):
+    if "youtube" in record.inputs["text"]:
+        return "SPAM"
+
+
+def contains_song(record: rb.TextClassificationRecord):
+    if "song" in record.inputs["text"]:
+        return "HAM"
+
+
+def contains_love(record: rb.TextClassificationRecord):
+    if "love" in record.inputs["text"]:
+        return "HAM"
+
+
+def contains_best(record: rb.TextClassificationRecord):
+    if "best" in record.inputs["text"]:
+        return "HAM"
+
+
+rules = [contains_subscribe, contains_check, contains_channel, contains_song, contains_love, contains_best]
+rules += load_rules(dataset=df_train)
+
+weak_labels = WeakLabels(rules=rules, dataset=df_train)
+
+# show some stats about the rules, see the `summary()` docstring for details
+weak_labels.summary()
+
+# instantiate the majority vote label model by simply providing the weak labels object
+majority_model = MajorityVoter(weak_labels)
+
+# check its performance
+print(majority_model.score(output_str=True))
+
