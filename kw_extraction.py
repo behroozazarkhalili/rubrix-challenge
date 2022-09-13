@@ -105,3 +105,18 @@ for i, cluster in enumerate(clusters):
     print("\t", "...")
     for sentence_id in cluster[-3:]:
         print("\t", corpus_sentences[sentence_id])
+
+
+def get_kw_from_cluster(kw_model: KeyBERT, text_list: List[List[str]], top_n: int = 3):
+    initial_kws = [kw_model.extract_keywords(text, keyphrase_ngram_range=(1, 1), stop_words='english', top_n=top_n) for text in text_list]
+    flatten_list = [kw for kws in initial_kws for kw in kws]
+    flatten_list = [kw for kws in flatten_list for kw in kws]
+    kws_list = [kw[0] for kw in flatten_list]
+    return kws_list
+
+
+cluster_kw_frequent_keywords = get_kw_from_cluster(keybert_model, clusters_sentences_list, 3)
+cluster_keywords_most_frequent = Counter(cluster_kw_frequent_keywords).most_common(10)
+
+cluster_ham_keywords = ["song", "love", "best"]
+cluster_spam_keywords = ["subscribe", "channel", "check"]
